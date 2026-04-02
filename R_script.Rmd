@@ -128,71 +128,8 @@ p2 <- plotEmbedding(ArchRProj = proj2, colorBy = "cellColData", name = "Clusters
 plotPDF(p1,p2, name = "Plot-UMAP-Sample-Clusters.pdf", ArchRProj = proj2, addDOC = FALSE, width = 5, height = 5)
 
 
-sc=readRDS("sc.celltype.rds")
-sc_meta=sc@meta.data
-sc_meta$ID=paste0(sc_meta$sample,sc_meta$batch)
-
-groupList <- SimpleList()
-for (id in levels(factor(proj2$ID))){
-  rna.sub <- sc_meta[sc_meta$ID == id,]
-  RNA.cells <- rownames(rna.sub)
-
-  idxSample <- BiocGenerics::which(proj2$ID == id)
-  ATAC.cells <- proj2$cellNames[idxSample] 
-                                          
-  groupList[[id]] <- SimpleList(          
-    ATAC = unique(ATAC.cells),
-    RNA = unique(RNA.cells)
-  )                
-} 
-
-proj3 <- addGeneIntegrationMatrix(
-    ArchRProj = proj2,     
-    useMatrix = "GeneScoreMatrix",
-    matrixName = "GeneIntegrationMatrix",
-    reducedDims = "IterativeLSI",
-    seRNA = sc,
-   # groupList = groupList,
-    addToArrow = FALSE,
-    groupRNA = "celltype",
-    nameCell = "predictedCell_Un",
-    nameGroup = "predictedGroup_Un",
-    nameScore = "predictedScore_Un",
-    force = TRUE
-)
-
-proj3 <- addGeneIntegrationMatrix(
-    ArchRProj = proj3,     
-    useMatrix = "GeneScoreMatrix",
-    matrixName = "GeneIntegrationMatrix",
-    reducedDims = "IterativeLSI",
-    seRNA = sc,
-    groupList = groupList,
-    addToArrow = TRUE,
-    groupRNA = "celltype",
-    nameCell = "predictedCell_Co",
-    nameGroup = "predictedGroup_Co",
-    nameScore = "predictedScore_Co",
-    force = TRUE
-)
-
-saveArchRProject(ArchRProj = proj3, outputDirectory = "out3", load = FALSE)
-pal <- paletteDiscrete(values = unique(proj3$predictedGroup_Co))
-p1 <- plotEmbedding(
-    proj3, 
-    colorBy = "cellColData", 
-    name = "predictedGroup_Un", 
-    pal = pal
-)
-p2 <- plotEmbedding(
-    proj3, 
-    colorBy = "cellColData", 
-    name = "predictedGroup_Co", 
-    pal = pal
-)
-plotPDF(p1,p2, name = "Plot-UMAP-RNA-Integration.pdf", ArchRProj = proj3, addDOC = FALSE, width = 5, height = 5)
 proj3<- addHarmony(
-    ArchRProj = proj3,
+    ArchRProj = proj2,
     reducedDims = "IterativeLSI",
     name = "Harmony",
     groupBy = "Sample"
@@ -249,68 +186,6 @@ heatmapPeaks<- markerHeatmap(
 plotPDF(heatmapPeaks, name = "Markers_peaks_ATAC_clusters.pdf", width = 8, height = 6, ArchRProj = proj3, addDOC = FALSE)
 
 
-markerTest <- getMarkerFeatures(
-  ArchRProj = proj3,
-  useMatrix = "PeakMatrix",
-  groupBy = "celltype",
-  bias = c("TSSEnrichment", "log10(nFrags)"),
-  testMethod = "wilcoxon",
-  useGroups = "Malignant", bgdGroups = "OPC"
-) 
-
-proj3<- addMotifAnnotations(ArchRProj = proj3, motifSet = "cisbp", name = "Motif")
-motifsUp <- peakAnnoEnrichment(
-    seMarker = markerTest,
-    ArchRProj = proj,
-    peakAnnotation = "Motif",
-    cutOff = "FDR <= 0.1 & Log2FC >= 1"
-  )
-df <- data.frame(TF = rownames(motifsUp), mlog10Padj = assay(motifsUp)[,1])
-df <- df[order(df$mlog10Padj, decreasing = TRUE),]
-df$rank <- seq_len(nrow(df))
-
-ggUp <- ggplot(df, aes(rank, mlog10Padj, color = mlog10Padj)) + 
-  geom_point(size = 1) +
-  ggrepel::geom_label_repel(
-        data = df[rev(seq_len(30)), ], aes(x = rank, y = mlog10Padj, label = TF), 
-        size = 1.5,
-        nudge_x = 2,
-        color = "black"
-  ) + theme_ArchR() + 
-  ylab("-log10(P-adj) Motif Enrichment") + 
-  xlab("Rank Sorted TFs Enriched") +
-  scale_color_gradientn(colors = paletteContinuous(set = "comet"))
-
-ggsave("ggUp.pdf",plot=ggUp,height=8,width=8)
-
-motifsDo <- peakAnnoEnrichment(
-    seMarker = markerTest,
-    ArchRProj = proj,
-    peakAnnotation = "Motif",
-    cutOff = "FDR <= 0.1 & Log2FC <= -0.5"
-  )
-    df <- data.frame(TF = rownames(motifsDo), mlog10Padj = assay(motifsDo)[,1])
-    df <- df[order(df$mlog10Padj, decreasing = TRUE),]
-    df$rank <- seq_len(nrow(df))
-
-ggDo <- ggplot(df, aes(rank, mlog10Padj, color = mlog10Padj)) + 
-  geom_point(size = 1) +
-  ggrepel::geom_label_repel(
-        data = df[rev(seq_len(30)), ], aes(x = rank, y = mlog10Padj, label = TF), 
-        size = 1.5,
-        nudge_x = 2,
-        color = "black"
-  ) + theme_ArchR() + 
-  ylab("-log10(FDR) Motif Enrichment") +
-  xlab("Rank Sorted TFs Enriched") +
-  scale_color_gradientn(colors = paletteContinuous(set = "comet"))
-
-
-ggsave("ggDo.pdf",plot=ggDo,height=8,width=8)
-
-plotPDF(ggUp, ggDo, name = "Markers-Motifs-Enriched", width = 5, height = 5, ArchRProj = proj3, addDOC = FALSE)
-
-
 enrichMotifs <- peakAnnoEnrichment(
     seMarker = markersPeaks,
     ArchRProj = proj3,
@@ -321,38 +196,46 @@ heatmapEM <- plotEnrichHeatmap(enrichMotifs, n = 7, transpose = TRUE)
 plotPDF(heatmapEM, name = "Motifs-Enriched-Marker-Heatmap.pdf", width = 8, height = 6, ArchRProj = proj3, addDOC = FALSE)
 
 
-proj3 <- addTrajectory(
-    ArchRProj = proj3,  name = "track", groupBy = "celltype",
-    trajectory = c("OPC","Malignant"), 
-    embedding = "UMAP", force = TRUE
+original_celltype <- proj3$celltype
+cells_to_keep <- proj3$celltype == "Tumor cell"
+proj4 <- proj3[cells_to_keep, ]
+
+markerPeaks2 <- getMarkerFeatures(
+    ArchRProj = proj4, 
+    useMatrix = "PeakMatrix",
+    groupBy = "batch",
+  bias = c("TSSEnrichment", "log10(nFrags)"),
+  testMethod = "wilcoxon"
 )
-trajMM  <- getTrajectory(ArchRProj = proj3, name = "track", useMatrix = "MotifMatrix", log2Norm = FALSE)
-trajGSM <- getTrajectory(ArchRProj = proj3, name = "track", useMatrix = "GeneScoreMatrix", log2Norm = TRUE)
-trajGIM <- getTrajectory(ArchRProj = proj3, name = "track", useMatrix = "GeneIntegrationMatrix", log2Norm = FALSE)
-trajPM  <- getTrajectory(ArchRProj = proj3, name = "track", useMatrix = "PeakMatrix", log2Norm = TRUE)
 
-corGSM_MM <- correlateTrajectories(trajGSM, trajMM)
-trajGSM2 <- trajGSM[corGSM_MM[[1]]$name1, ]
-trajMM2 <- trajMM[corGSM_MM[[1]]$name2, ]
-trajCombined <- trajGSM2
-assay(trajCombined,withDimnames=FALSE) <- t(apply(assay(trajGSM2), 1, scale)) + t(apply(assay(trajMM2), 1, scale))
-combinedMat <- plotTrajectoryHeatmap(trajCombined, returnMat = TRUE, varCutOff = 0)
-rowOrder <- match(rownames(combinedMat), rownames(trajGSM2))
-ht1 <- plotTrajectoryHeatmap(trajGSM2,  pal = paletteContinuous(set = "horizonExtra"),  varCutOff = 0, rowOrder = rowOrder)
-ht2 <- plotTrajectoryHeatmap(trajMM2, pal = paletteContinuous(set = "solarExtra"), varCutOff = 0, rowOrder = rowOrder)
+heatmapPeaks2<- markerHeatmap(
+  seMarker = markersPeaks2,
+  cutOff = "FDR <= 0.01 & Log2FC >= 1",
+  labelMarkers =NULL,
+  transpose = F,
+  pal =  viridis(n=256),
+  limits = c(-2,2)
+)
+plotPDF(heatmapPeaks2, name = "Markers_peaks_ATAC_batch.pdf", width = 8, height = 6, ArchRProj = proj4, addDOC = FALSE)
 
-pdf("plotTrajectoryHeatmap1.pdf",width=12,height=6)
-
-
-corGIM_MM <- correlateTrajectories(trajGIM, trajMM)
-trajGIM2 <- trajGIM[corGIM_MM[[1]]$name1, ]
-trajMM2 <- trajMM[corGIM_MM[[1]]$name2, ]
-trajCombined <- trajGIM2
-assay(trajCombined,,withDimnames=FALSE) <- t(apply(assay(trajGIM2), 1, scale)) + t(apply(assay(trajMM2), 1, scale))
-combinedMat <- plotTrajectoryHeatmap(trajCombined, returnMat = TRUE, varCutOff = 0)
-rowOrder <- match(rownames(combinedMat), rownames(trajGIM2))
-ht3 <- plotTrajectoryHeatmap(trajGIM2,  pal = paletteContinuous(set = "blueYellow"),  varCutOff = 0, rowOrder = rowOrder)
-ht4 <- plotTrajectoryHeatmap(trajMM2, pal = paletteContinuous(set = "solarExtra"), varCutOff = 0, rowOrder = rowOrder)
-pdf("plotTrajectoryHeatmap2.pdf",width=12,height=6)
-ht3+ht4
-dev.off()
+enrichMotifs <- peakAnnoEnrichment(
+    seMarker = markerPeaks2,
+    ArchRProj = proj4,
+    peakAnnotation = "Motif",
+    cutOff = "Log2FC >= 1"
+  )
+heatmapEM <- plotEnrichHeatmap(enrichMotifs, n = 10, transpose = TRUE)
+markerMotifs= c('FOSL1_142','FOS_137','JUN_143' )
+motifPositions <- getPositions(proj4)
+seFoot <- getFootprints(
+  ArchRProj = proj4, 
+  positions = motifPositions[markerMotifs], 
+  groupBy = "batch"
+)
+plotFootprints(
+  seFoot = seFoot,
+  ArchRProj = proj4, 
+  normMethod = "None",
+  plotName = "Footprints-No-Normalization",
+  smoothWindow = 5
+)
