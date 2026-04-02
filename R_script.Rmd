@@ -190,7 +190,7 @@ enrichMotifs <- peakAnnoEnrichment(
     seMarker = markersPeaks,
     ArchRProj = proj3,
     peakAnnotation = "Motif",
-    cutOff = "FDR <= 0.1 & Log2FC >= 0.5"
+    cutOff = "FDR <= 0.01 & Log2FC >= 1"
   )
 heatmapEM <- plotEnrichHeatmap(enrichMotifs, n = 7, transpose = TRUE)
 plotPDF(heatmapEM, name = "Motifs-Enriched-Marker-Heatmap.pdf", width = 8, height = 6, ArchRProj = proj3, addDOC = FALSE)
@@ -222,7 +222,7 @@ enrichMotifs <- peakAnnoEnrichment(
     seMarker = markerPeaks2,
     ArchRProj = proj4,
     peakAnnotation = "Motif",
-    cutOff = "Log2FC >= 1"
+    cutOff = "FDR <= 0.01 & Log2FC >= 1"
   )
 heatmapEM <- plotEnrichHeatmap(enrichMotifs, n = 10, transpose = TRUE)
 markerMotifs= c('FOSL1_142','FOS_137','JUN_143' )
